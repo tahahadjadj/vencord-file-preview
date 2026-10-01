@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "checks": [
+    "Raw default and exact source",
+    "headings, lists, links, fenced code, GFM table",
+    "HTML/scripts/iframes inert",
+    "no image elements or external requests",
+    "safe links and no referrer",
+    "independent attachment state",
+    "truncation/size disabled with explanation",
+    "25 toggle cycles",
+    "rerender state and raw node preserved",
+    "dark/light screenshots",
+    "keyboard Enter and labelled regions",
+    "unmount/remount reset",
+    "no page errors"
+  ],
+  "htmlChecks": [
+    "HTML semantic preview",
+    "scripts/resources/forms/navigation stripped",
+    "empty opaque-origin sandbox",
+    "parent DOM inaccessible",
+    "script, popup and resource execution blocked even if injected",
+    "HTML dark/light theme follows ThemeStore",
+    "HTML partial safeguard",
+    "10 HTML toggles and exact raw source"
+  ],
+  "externalRequests": [],
+  "pageErrors": []
+}
