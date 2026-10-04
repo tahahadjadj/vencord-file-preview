@@ -1,15 +1,15 @@
 # Verification
 
-Checked 2026-10-01 against Vencord base `7f0c10cc29fd789f2f4828ae3dc947623e837920`.
+Checked 2026-10-04 against Vencord base `7f0c10cc29fd789f2f4828ae3dc947623e837920`.
 
-- `npm test`: 29 passing unit/security/compatibility tests.
-- `npm run test:browser`: passing Markdown and HTML checks, zero external requests and zero page errors. Includes hostile HTML, stripped navigation/forms/resources, opaque-origin parent isolation, sandbox/CSP defense, themes, raw preservation, 25 Markdown and 10 HTML toggle cycles, rerender/remount and keyboard checks.
-- `npm audit --audit-level=high`: zero known dependency vulnerabilities at validation time.
-- Fresh official Vencord checkout with locked dependencies: full `pnpm test` passed (standalone desktop build, TypeScript, repository ESLint, upstream stylelint and metadata generation). FilePreview and an unchanged existing custom plugin compiled together; unrelated source is excluded from this repository.
-- Explicit FilePreview stylesheet lint passed because upstream's normal stylesheet command excludes userplugins.
-- All three actual patch regexes replayed against captured inline/modal functions. Known CopyFileContents injection points remain available. Public full-bundle uniqueness was established for the unchanged three signatures during predecessor verification.
-- Synthetic screenshots were inspected; they contain only generated example content and no account/chat information.
+- `npm test`: 64 passing parser, security, limit and compatibility tests. Includes the earlier 29 tests, accumulated full-file/line/depth repairs and 14 CSV tests with 50 deterministic Unicode/quote/newline round trips.
+- `npm run test:browser`: passes for Markdown, HTML and CSV, with zero external requests and zero page errors. CSV covers quoted commas, escaped quotes, BOM, embedded CRLF, empty cells, literal hostile HTML/URLs/formulas, captions/scoped headings, horizontal overflow, ten inline and ten expanded toggle cycles, exact Raw restoration, keyboard activation, Escape/button dismissal and reopen reset. Malformed, partial, empty and over-limit CSV fallbacks pass.
+- Markdown horizontal rules and hard line breaks render without passing children to React void tags (error 137). The harness exercises both supported void tags.
+- Earlier HTML isolation checks still pass: source scripts/styles/resources/forms/navigation stripped, opaque empty sandbox, parent DOM inaccessible, sandbox/CSP execution blocked, theme selection, ten toggles and exact Raw preservation. Markdown preserves its 25 toggle cycles, raw DOM node, rerender/remount behavior and keyboard checks.
+- Full Vencord `pnpm test`: standalone build, TypeScript, repository ESLint, core stylesheet lint and metadata generation pass against final combined local code. Explicit userplugin stylesheet lint passes. Bundled vendors retain the documented vendor-only ESLint exclusion; plugin source is linted normally.
+- Four grouped patch replacements replay exactly once against the public inline/modal snapshot plus a synthetic native range-loader boundary. Syntax and native Raw/CopyFileContents injection points are preserved. The old 2026-10-01 public inline/modal fixture is a compatibility snapshot, not proof of current native attachment eligibility.
+- Synthetic screenshots were inspected; no account/chat/private attachment contents or local report data are committed.
 
-The original Markdown plugin startup was observed in Discord desktop 0.0.414. The renamed FilePreview/HTML revision was **not installed or started in Discord**. Native HTML/HTM text-preview eligibility and actual desktop attachment toggle, inline/modal layout, spoiler gating, native copy/download, Electron link behavior, iframe acceptance under the client's CSP, custom-theme overrides, all active-plugin interactions and disable/restart persistence remain unverified. This repository does not claim those tests passed.
+The final plugin is installed locally with a fresh rollback backup, preserving unrelated plugins, settings, loader injection and immutable file flags. GitHub Actions runs unit tests and builds the synthetic harness on Node 22; actual browser execution and full Vencord checks are performed locally.
 
-No desktop UI, console fixtures, messages, uploads, reinstall or restart were used for this revision. Tests use only a temporary local browser profile and synthetic data. The currently installed custom plugins were left unchanged.
+An authenticated Discord client and supported desktop controls are required for live verification of this release. CSV native text-preview eligibility, real inline/modal layout, spoiler gating, native copy/download, Electron behavior, client CSP interaction, custom themes and plugin interactions remain pending. This release does not claim an actual CSV attachment test passed. No messages, uploads, attachment edits or deletions were used. Tests use a temporary local browser profile and synthetic data.

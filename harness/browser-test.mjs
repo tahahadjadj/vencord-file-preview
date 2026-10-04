@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { csvRows, csvSample } from "./samples.mjs";
 
 const base = new URL("./", import.meta.url).pathname;
 const output = new URL("../test-results/", import.meta.url).pathname;
@@ -40,6 +41,9 @@ try {
     assert.equal(await page.$eval(`${main} .vc-file-rich h1`, element => element.textContent), "Markdown in Discord");
     assert.equal(await page.$$eval(`${main} .vc-file-rich table`, elements => elements.length), 1);
     assert.equal(await page.$$eval(`${main} .vc-file-rich pre code`, elements => elements.length), 1);
+    assert.equal(await page.$$eval(`${main} .vc-file-rich hr`, elements => elements.length), 1);
+    assert.equal(await page.$$eval(`${main} .vc-file-rich br`, elements => elements.length), 1);
+    assert.ok(await page.$$eval(`${main} .vc-file-rich hr, ${main} .vc-file-rich br`, elements => elements.every(element => element.childNodes.length === 0)));
     assert.equal(await page.$$eval(`${main} .vc-file-rich img, ${main} .vc-file-rich script, ${main} .vc-file-rich iframe`, elements => elements.length), 0);
     assert.equal(await page.evaluate(() => window.evil), undefined);
     const anchor = await page.$eval(`${main} .vc-file-rich a`, element => ({ href: element.href, rel: element.rel, referrerPolicy: element.referrerPolicy, target: element.target }));
@@ -109,8 +113,53 @@ try {
     await page.click(htmlRaw);
     await page.click(htmlPreview);
     assert.deepEqual(errors, []);
+    async function verifyCsv(card) {
+        const rawButton = `${card} .vc-file-toolbar button:first-child`;
+        const previewButton = `${card} .vc-file-toolbar button:nth-child(2)`;
+        assert.equal(await page.$eval(`${card} .native-raw`, node => node.textContent), csvSample);
+        for (let cycle = 0; cycle < 10; cycle++) {
+            await page.click(previewButton);
+            assert.equal(await pressed(previewButton), "true");
+            assert.deepEqual(await page.$$eval(`${card} tbody tr`, rows => rows.map(row => [...row.querySelectorAll("td")].map(cell => cell.textContent))), csvRows);
+            assert.equal(await page.$$eval(`${card} th[scope=col]`, nodes => nodes.length), 4);
+            assert.equal(await page.$eval(`${card} caption`, node => node.textContent), "sample.CSV — 4 rows");
+            assert.equal(await page.$$eval(`${card} .vc-file-rich script, ${card} .vc-file-rich img, ${card} .vc-file-rich a, ${card} .vc-file-rich iframe`, nodes => nodes.length), 0);
+            assert.equal(await page.evaluate(() => window.csvExecuted), undefined);
+            assert.equal(await page.$eval(`${card} td`, node => getComputedStyle(node).whiteSpace), "pre-wrap");
+            await page.click(rawButton);
+            assert.equal(await page.$eval(`${card} .native-raw`, node => node.textContent), csvSample);
+            assert.equal(await pressed(rawButton), "true");
+        }
+    }
+    await verifyCsv("#csv-card");
+    await page.click("#expand-csv");
+    assert.equal(await pressed("#csv-modal .vc-file-toolbar button:first-child"), "true");
+    await verifyCsv("#csv-modal");
+    await page.focus("#csv-modal .vc-file-toolbar button:nth-child(2)");
+    await page.keyboard.press("Enter");
+    assert.equal(await pressed("#csv-modal .vc-file-toolbar button:nth-child(2)"), "true");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.$("#csv-modal"), null);
+    await page.click("#expand-csv");
+    assert.equal(await pressed("#csv-modal .vc-file-toolbar button:first-child"), "true");
+    await page.click("#close-csv");
+    assert.equal(await page.$("#csv-modal"), null);
+    assert.ok(await page.$eval("#csv-partial .vc-file-toolbar button:nth-child(2)", node => node.disabled));
+    for (const card of ["#csv-invalid", "#csv-limited"]) {
+        await page.click(`${card} .vc-file-toolbar button:nth-child(2)`);
+        assert.ok(await page.$eval(`${card} .vc-file-notice`, node => node.textContent.length));
+        assert.equal(await pressed(`${card} .vc-file-toolbar button:first-child`), "true");
+        assert.equal(await page.$$eval(`${card} table`, nodes => nodes.length), 0);
+    }
+    await page.click("#csv-empty .vc-file-toolbar button:nth-child(2)");
+    assert.equal(await page.$eval("#csv-empty .vc-file-notice", node => node.textContent), "This CSV is empty.");
+    await page.click("#csv-wide .vc-file-toolbar button:nth-child(2)");
+    assert.ok(await page.$eval("#csv-wide .vc-file-rich", node => node.scrollWidth > node.clientWidth));
+    await page.click("#csv-card .vc-file-toolbar button:nth-child(2)");
+    await (await page.$("#csv-card")).screenshot({ path: path.join(output, "csv-preview.png") });
+    assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
-    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "no page errors"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
+    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "Markdown hr/br render without React137" , "no page errors"], csvChecks: ["quoted fields, escaped quotes, BOM, embedded CRLF and empty cells", "literal hostile markup, URLs and formulas", "all records preserved with scoped column headers and caption", "10 inline and 10 expanded toggle cycles with exact Raw", "keyboard Preview and Escape dismissal", "reopen resets to Raw", "empty, malformed, partial and bounded-table fallbacks", "horizontal overflow", "no scripts, links, images, page errors or external requests"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
     await writeFile(path.join(output, "browser-results.json"), JSON.stringify(result, null, 2) + "\n");
     console.log(JSON.stringify(result, null, 2));
 } finally { await browser.close(); server.close(); }

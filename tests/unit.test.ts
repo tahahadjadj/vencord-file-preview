@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { isMarkdownFilename, MAX_BYTES, parseMarkdown, safeLink, sourceProblem } from "../plugin/filePreview/markdown";
+import { isMarkdownFilename, MAX_BYTES, MAX_LINES, MAX_LINE_LENGTH, parseMarkdown, safeLink, sourceProblem } from "../plugin/filePreview/markdown";
 import { previewPatch } from "../plugin/filePreview/patches";
 
 test("only exact Markdown filenames qualify", () => {
@@ -54,8 +54,8 @@ test("truncated, unknown and oversize content fails closed", () => {
     assert.ok(sourceProblem(undefined, 0));
     assert.ok(parseMarkdown("a".repeat(MAX_BYTES + 1)).error);
     assert.ok(parseMarkdown("😀".repeat(MAX_BYTES / 3)).error);
-    assert.ok(parseMarkdown("x\n".repeat(2001)).error);
-    assert.ok(parseMarkdown("x".repeat(4097)).error);
+    assert.ok(parseMarkdown("x\n".repeat(MAX_LINES + 1)).error);
+    assert.ok(parseMarkdown("x".repeat(MAX_LINE_LENGTH + 1)).error);
 });
 
 test("deep and dense documents fail closed", () => {
@@ -100,6 +100,18 @@ test("all patches match current public inline/modal functions exactly once and p
         assert.equal(value.raw.props.text, props.fileContents);
         assert.equal(value.native.type, "nativeMarkdown");
     }
+    for (const fileName of ["sheet.csv", "page.html"]) {
+        captured.length = 0;
+        const plainProps = { ...props, fileName, markdownEnabled: false, renderMarkdown: false };
+        component.inline(plainProps);
+        component.modal(plainProps);
+        assert.equal(captured.length, 2);
+        for (const value of captured) {
+            assert.equal(value.props, plainProps);
+            assert.equal(value.native.type, "nativeRaw");
+            assert.equal(value.raw.props.text, plainProps.fileContents);
+        }
+    }
     assert.ok(source.includes("fileName:n"));
     assert.ok(source.includes("url:t"));
     assert.ok(source.includes("wordWrap"));
@@ -118,7 +130,7 @@ test("CopyFileContents injection points remain available after preview patches",
     for (const pattern of patterns) assert.ok(new RegExp(pattern.replaceAll("\\i", "(?:[A-Za-z_$][\\w$]*)")).test(source));
 });
 
-import { HTML_CSP, isHtmlFilename, parseHtml } from "../plugin/filePreview/html";
+import { HTML_CSP, isHtmlFilename, MAX_HTML_DEPTH, parseHtml } from "../plugin/filePreview/html";
 
 test("HTML filenames are exact and case insensitive", () => {
     for (const name of ["page.html", "PAGE.HTM", "SPOILER_page.HTML"]) assert.ok(isHtmlFilename(name));
@@ -162,7 +174,7 @@ test("HTML partial, size, line, depth and node limits fail closed", () => {
     assert.ok(parseHtml("<p>Partial</p>", 1).error);
     assert.ok(parseHtml("<p>Missing length</p>", NaN).error);
     assert.ok(parseHtml("x".repeat(MAX_BYTES + 1)).error);
-    assert.ok(parseHtml("<div>".repeat(30) + "deep" + "</div>".repeat(30)).error);
+    assert.ok(parseHtml("<div>".repeat(MAX_HTML_DEPTH + 2) + "deep" + "</div>".repeat(MAX_HTML_DEPTH + 2)).error);
     assert.ok(parseHtml(("<span>x</span>".repeat(200) + "\n").repeat(20)).error);
 });
 

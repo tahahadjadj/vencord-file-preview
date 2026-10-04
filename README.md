@@ -1,10 +1,10 @@
 # File Preview for Vencord
 
-A source userplugin that adds **Raw / Preview** buttons to Markdown (`.md`, `.markdown`) and HTML (`.html`, `.htm`) text attachments, including uppercase extensions. Raw is the default and preserves Discord's original source component. Preview shows headings, lists, tables and code in a readable view.
+A source userplugin that adds **Raw / Preview** buttons to Markdown (`.md`, `.markdown`), HTML (`.html`, `.htm`) and CSV (`.csv`) text attachments, including uppercase extensions. Raw is the default and preserves Discord's original source component. Preview shows headings, lists, tables and code in a readable view.
 
 ![Synthetic Markdown preview](docs/images/preview-dark.png)
 
-Screenshots are from an account-free **synthetic browser harness**, not the live Discord client. [Raw](docs/images/raw-dark.png) · [Light](docs/images/preview-light.png) · [HTML](docs/images/html-preview.png).
+Screenshots are from an account-free **synthetic browser harness**, not the live Discord client. [Raw](docs/images/raw-dark.png) · [Light](docs/images/preview-light.png) · [HTML](docs/images/html-preview.png) · [CSV](docs/images/csv-preview.png).
 
 ## Installation
 
@@ -25,21 +25,23 @@ Markdown supports headings, paragraphs, emphasis, ordered/unordered lists, block
 
 HTML uses fixed dark/light styling selected by Vencord's ThemeStore. Markdown uses Discord theme variables. HTML custom-theme styling and exact original webpage appearance are unsupported. Code is displayed without syntax highlighting or execution. Mermaid is unsupported.
 
+CSV supports comma-separated records, quoted commas, doubled escaped quotes, embedded line endings, CRLF/LF/CR record endings, a leading UTF-8 BOM, empty cells and ragged records. Every record is retained as data, including the first; generated column headings and a caption make the table accessible without guessing whether the first record is a header. Missing cells are padded, multiline cells preserve their line breaks, and wide tables scroll within the preview. Cell contents, including formulas, HTML and URLs, are literal text. Malformed quoting shows an explanation and keeps Raw available. CSV uses no additional parser dependency.
+
 ## Untrusted content
 
-The plugin uses only text Discord already loaded, with no remote rendering service, account/token store, native file access or plugin network requests. Markdown HTML/scripts are literal text. Images become labels with URLs discarded. Only explicit HTTP/HTTPS Markdown links without credentials are clickable, using `noopener noreferrer` and no referrer. HTML links remain plain text.
+The plugin uses Discord's native text loader and requests a bounded range of `bytes=0-262144` (256 KiB plus one detection byte) for supported attachments on `cdn.discordapp.com` and `media.discordapp.net`. Unrelated URLs keep Discord's original range. It has no remote rendering service, account/token store or native file access. Markdown HTML/scripts are literal text. Images become labels with URLs discarded. Only explicit HTTP/HTTPS Markdown links without credentials are clickable, using `noopener noreferrer` and no referrer. HTML links remain plain text.
 
 HTML is parsed by a bundled, pure-JavaScript parse5 AST parser; no untrusted browser DOM is created during parsing. An explicit allowlist emits fixed semantic elements with escaped text and **no source attributes**. Script/style/resource/form/meta/base/SVG/MathML and other active subtrees are discarded. The result is placed in an iframe with an **empty sandbox** (no scripts, same-origin access, forms, popups, downloads or top-navigation permissions), no referrer, and a CSP that blocks scripts, connections, images, media, frames, objects, fonts, base URLs and form submissions. Only the plugin's fixed theme CSS is present. The opaque-origin sandbox prevents attachment content from accessing the parent document. See the [iframe sandbox documentation](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#sandbox) and [parse5 API](https://parse5.js.org/functions/parse5.parseFragment.html).
 
-Both formats fail closed for missing/partial text or unknown byte counts. Limits: 64 KiB, 2,000 lines, 4,096 UTF-16 units per line, 6,000 counted tokens/nodes and nesting depth 24. Discord's verified native range loader reads approximately 50,000 bytes, so partial files can reach that limit first. Raw and original download stay available; the plugin does not fetch the remainder. Parser complexity tests are practical checks, not a formal worst-case runtime proof.
+All formats fail closed for missing/partial text or unknown byte counts. The shared file limit is **256 KiB** and 8,192 physical lines. Markdown additionally allows 16,384 UTF-16 code units per line, 6,000 counted tokens/nodes and depth 24. HTML allows a minified line up to the overall byte budget, 6,000 counted nodes and depth 64. CSV allows up to **1,000 records, 100 columns, 6,000 displayed cells (including padding), and 16,384 UTF-16 code units per field**; records can span lines. Oversize or complex files keep Raw and the original download available. Parser complexity tests are practical checks, not a formal worst-case runtime proof.
 
 ## Verification status
 
-Integration targets Vencord `7f0c10cc29fd789f2f4828ae3dc947623e837920` and the public Discord bundle `web.91d9ed412e5a4f3b.js` captured on 2026-10-01. All three grouped patch replacements matched once in that complete public bundle during the Markdown predecessor's checks; the same signatures are replayed here against the small inline/modal compatibility fixture. Vencord applies the group together or discards it together if signatures drift.
+Integration targets Vencord `7f0c10cc29fd789f2f4828ae3dc947623e837920`. Four grouped replacements cover the bounded native range fetch, inline preview, expanded preview and six-line clipping. The attachment-wrapper lookup avoids the separate highlighting component. Compatibility fixtures replay each replacement exactly once and preserve native Raw, expansion and CopyFileContents boundaries. Vencord applies the group together or discards it together if signatures drift.
 
-The Markdown predecessor passed full Vencord build/type/lint checks and its installed plugin startup was observed in Discord desktop 0.0.414. **This renamed HTML-capable FilePreview version has not been installed or started in the desktop client. Actual desktop attachment Raw/Preview behavior remains unverified for both versions. The integration depends on Discord exposing its native text preview for an attachment; files displayed only as generic downloads are not intercepted.** No installation/restart or live Discord fixture was performed for this revision.
+The plugin, including earlier full-file loading and rendering repairs, is installed in the local Discord client. This release also fixes React error 137 when Markdown contains horizontal rules or hard line breaks. CSV passes parser and synthetic browser tests for inline/expanded toggles and dismissal. **This final CSV release has not been live-tested on an actual attachment; authenticated desktop verification is still pending.** Files displayed only as generic downloads are not intercepted: Discord must expose its native text-preview component for the attachment.
 
-Portable tests cover Markdown regression, HTML sanitizer attacks, malformed/foreign-content HTML, resource/navigation stripping, empty opaque sandbox, blocked script/popup execution, inaccessible parent DOM, raw preservation, limits, repeated toggles, independent attachments, rerenders, keyboard activation and light/dark views. See [verification details](docs/VERIFICATION.md) for completed checks and remaining desktop limitations.
+Portable tests cover Markdown and HTML regressions, CSV parsing/bounds/literal rendering, repeated toggles, independent attachments, raw preservation, accessibility, keyboard controls, expanded views, theme changes, hostile HTML, sandbox/CSP isolation and external-request blocking. See [verification details](docs/VERIFICATION.md) for completed checks and remaining desktop limitations. All committed fixtures and screenshots are synthetic or public compatibility snapshots; no private chats or local reports are included.
 
 ## Run tests
 

@@ -3,6 +3,8 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { FilePreview } from "../plugin/filePreview/Preview";
 import "../plugin/filePreview/style.css";
+import { csvSample } from "./samples.mjs";
+import { MAX_BYTES } from "../plugin/filePreview/markdown";
 
 const sample = `# Markdown in Discord
 
@@ -30,6 +32,11 @@ console.log(view);
 <script>window.evil = true</script>
 
 [Unsafe link](javascript:alert%281%29)
+
+---
+
+First line${"  "}
+Second line.
 `;
 
 const htmlSample = "<h1>HTML file preview</h1><p>Readable <strong>HTML</strong>, isolated from Discord.</p><ul><li>Lists</li><li>Tables</li></ul><table><tr><th>Format</th><th>View</th></tr><tr><td>HTML</td><td>Preview</td></tr></table><pre><code>const mode = \"Preview\";</code></pre><a href=\"https://tracking.invalid/leave\" target=\"_top\">Navigation is disabled</a><img src=\"https://tracking.invalid/image\" alt=\"Remote image\"><script>parent.htmlExecuted=true;fetch(\"https://tracking.invalid/script\");window.open(\"https://tracking.invalid/popup\");</script><style>@import \"https://tracking.invalid/style\";</style><form action=\"https://tracking.invalid/form\"><input value=\"no\"></form><iframe src=\"https://tracking.invalid/frame\"></iframe><meta http-equiv=\"refresh\" content=\"0;url=https://tracking.invalid/refresh\">";
@@ -39,6 +46,7 @@ function App() {
     const [light, setLight] = React.useState(false);
     const [visible, setVisible] = React.useState(true);
     const [version, setVersion] = React.useState(0);
+    const [expanded, setExpanded] = React.useState(false);
     ThemeStore.theme = light ? "light" : "dark";
     React.useEffect(() => { document.body.className = light ? "light" : "dark"; }, [light]);
     return <main>
@@ -47,9 +55,16 @@ function App() {
         {visible && <div className="card" id="main-card"><FilePreview fileName="notes.md" fileContents={sample} bytesLeft={0} raw={<pre className="native-raw">{sample}</pre>} /><footer>notes.md · <a download="notes.md" href={"data:text/plain;charset=utf-8," + encodeURIComponent(sample)}>Download original</a></footer></div>}
         <div className="card" id="html-card"><FilePreview fileName="page.HTML" fileContents={htmlSample} bytesLeft={0} raw={<pre className="native-raw">{htmlSample}</pre>} /></div>
         <div className="card" id="html-partial-card"><FilePreview fileName="partial.htm" fileContents="<h1>Partial</h1>" bytesLeft={8} raw={<pre className="native-raw">Partial HTML</pre>} /></div>
+        <div className="card" id="csv-card"><FilePreview fileName="sample.CSV" fileContents={csvSample} bytesLeft={0} raw={<pre className="native-raw">{csvSample}</pre>} /><button id="expand-csv" onClick={() => setExpanded(true)}>Open expanded CSV</button></div>
+        {expanded && <div className="card" id="csv-modal" role="dialog" aria-modal="true" aria-label="Expanded CSV" onKeyDown={event => { if (event.key === "Escape") setExpanded(false); }}><button id="close-csv" onClick={() => setExpanded(false)}>Close</button><FilePreview fileName="sample.CSV" fileContents={csvSample} bytesLeft={0} raw={<pre className="native-raw">{csvSample}</pre>} /></div>}
+        <div className="card" id="csv-empty"><FilePreview fileName="empty.csv" fileContents="" bytesLeft={0} raw={<pre className="native-raw" />} /></div>
+        <div className="card" id="csv-invalid"><FilePreview fileName="invalid.csv" fileContents={'"unfinished'} bytesLeft={0} raw={<pre className="native-raw">{'"unfinished'}</pre>} /></div>
+        <div className="card" id="csv-limited"><FilePreview fileName="too-many.csv" fileContents={"a\n".repeat(1001)} bytesLeft={0} raw={<pre className="native-raw">CSV original remains available</pre>} /></div>
+        <div className="card" id="csv-partial"><FilePreview fileName="partial.csv" fileContents="a,b" bytesLeft={2} raw={<pre className="native-raw">a,b</pre>} /></div>
+        <div className="card" id="csv-wide"><FilePreview fileName="wide.csv" fileContents={Array(20).fill("wide cell").join(",")} bytesLeft={0} raw={<pre className="native-raw">Wide CSV original</pre>} /></div>
         <div className="card" id="other-card"><FilePreview fileName="other.MARKDOWN" fileContents="# Another attachment\n\nIndependent state." bytesLeft={0} raw={<pre className="native-raw"># Another attachment</pre>} /></div>
         <div className="card" id="partial-card"><FilePreview fileName="partial.md" fileContents="# Partial content" bytesLeft={512} raw={<pre className="native-raw"># Partial content</pre>} /></div>
-        <div className="card" id="large-card"><FilePreview fileName="large.md" fileContents={"x".repeat(66000)} bytesLeft={0} raw={<pre className="native-raw">Large original source remains available</pre>} /></div>
+        <div className="card" id="large-card"><FilePreview fileName="large.md" fileContents={"x".repeat(MAX_BYTES + 1)} bytesLeft={0} raw={<pre className="native-raw">Large original source remains available</pre>} /></div>
     </main>;
 }
 root.render(<App />);

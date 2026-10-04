@@ -6,9 +6,9 @@
 
 import { Lexer, Token } from "./vendor/marked";
 
-export const MAX_BYTES = 64 * 1024;
-const MAX_LINES = 2000;
-const MAX_LINE_LENGTH = 4096;
+export const MAX_BYTES = 256 * 1024;
+export const MAX_LINES = 8192;
+export const MAX_LINE_LENGTH = 16 * 1024;
 const MAX_NODES = 6000;
 const MAX_DEPTH = 24;
 
@@ -28,13 +28,13 @@ export function safeLink(href: string): string | undefined {
     } catch { /* Invalid links remain text. */ }
 }
 
-export function sourceProblem(source: unknown, bytesLeft: unknown): string | undefined {
+export function sourceProblem(source: unknown, bytesLeft: unknown, maxBytes = MAX_BYTES, maxLineLength = MAX_LINE_LENGTH): string | undefined {
     if (typeof source !== "string") return "Text is not loaded yet. Use Raw and try again once Discord loads the file.";
     if (typeof bytesLeft !== "number" || !Number.isFinite(bytesLeft) || bytesLeft < 0) return "Discord did not provide a complete preview. Use Raw or download the original.";
     if (bytesLeft > 0) return "Discord loaded only part of this file. Use Raw or download the original.";
-    if (source.length > MAX_BYTES || new TextEncoder().encode(source).byteLength > MAX_BYTES) return "Preview is limited to 64 KiB. Use Raw or download the original.";
+    if (source.length > maxBytes || new TextEncoder().encode(source).byteLength > maxBytes) return `Preview is limited to ${maxBytes / 1024} KiB. Use Raw or download the original.`;
     const lines = source.split(/\r\n?|\n/);
-    if (lines.length > MAX_LINES || lines.some(line => line.length > MAX_LINE_LENGTH)) return "This file exceeds the preview line limits. Use Raw or download the original.";
+    if (lines.length > MAX_LINES || lines.some(line => line.length > maxLineLength)) return "This file exceeds the preview line limits. Use Raw or download the original.";
 }
 
 function decodeText(text: string): string {

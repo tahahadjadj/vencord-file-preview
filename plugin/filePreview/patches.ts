@@ -7,9 +7,16 @@
 import type { Patch } from "@utils/types";
 
 export const previewPatch: Omit<Patch, "plugin"> = {
-    find: "PlaintextFilePreview",
+    // The highlighting component also contains "PlaintextFilePreview".
+    // Select the attachment wrapper that owns both inline and modal previews.
+    find: "--custom-plaintext-preview-collapsed-lines",
     group: true,
     replacement: [
+        // Discord's 50 KB prefix is insufficient for many report attachments.
+        {
+            match: /fetch\((\i),\{headers:\{Range:"bytes=0-50000"/,
+            replace: "fetch($1,{headers:{Range:$self.previewRange($1)"
+        },
         // Inline text preview, including the native Markdown experiment.
         {
             match: /children:(null==(\i)\?\(0,\i\.jsx\)\(\i(?:\.\i)?,\{className:\i\.\i\}\):\i\?\(0,\i\.jsx\)\(\i,\{text:\i,notice:\i\.trim\(\)\}\):(\(0,\i\.jsx\)\(\i,\{text:\i\+\i,language:\i,wordWrap:\i\}\)))/,

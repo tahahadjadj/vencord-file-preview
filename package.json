@@ -1,11 +1,11 @@
 {
   "name": "vencord-file-preview",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "test": "node --import tsx --test tests/unit.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "build:harness": "node harness/build.mjs",
     "test:browser": "npm run build:harness && node harness/browser-test.mjs"
   },

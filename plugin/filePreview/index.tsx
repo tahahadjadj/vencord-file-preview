@@ -10,20 +10,23 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import definePlugin from "@utils/types";
 import { React } from "@webpack/common";
 
-import { isHtmlFilename } from "./html";
+import { isCsvFilename } from "./csv";
+import { attachmentPreviewRange, isHtmlFilename } from "./html";
 import { isMarkdownFilename } from "./markdown";
 import { previewPatch } from "./patches";
 import { FilePreview, PreviewProps } from "./Preview";
 
 export default definePlugin({
     name: "FilePreview",
-    description: "Adds a safe Raw / Preview toggle to Markdown and HTML file attachments.",
+    description: "Adds a safe Raw / Preview toggle to Markdown, HTML and CSV file attachments.",
     authors: [{ name: "Local plugin", id: 0n }],
     restartNeeded: true,
     patches: [previewPatch],
 
+    previewRange: attachmentPreviewRange,
+
     isFilePreview(props: Partial<PreviewProps>) {
-        return (isMarkdownFilename(props?.fileName) || isHtmlFilename(props?.fileName)) && typeof props.fileContents === "string";
+        return (isMarkdownFilename(props?.fileName) || isHtmlFilename(props?.fileName) || isCsvFilename(props?.fileName)) && typeof props.fileContents === "string";
     },
 
     wrapPreview(props: Partial<PreviewProps> & { url?: string; }, native: React.ReactNode, raw: React.ReactNode) {

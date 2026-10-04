@@ -136,6 +136,19 @@
     font-weight: 600;
 }
 
+.vc-file-csv caption {
+    text-align: left;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.vc-file-csv td {
+    white-space: pre-wrap;
+    min-width: 100px;
+    max-width: 360px;
+    vertical-align: top;
+}
+
 .vc-file-rich hr {
     border: 0;
     border-top: 1px solid var(--border-subtle, var(--background-modifier-accent));

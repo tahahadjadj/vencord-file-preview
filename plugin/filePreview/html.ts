@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { sourceProblem } from "./markdown";
+import { isCsvFilename } from "./csv";
+import { isMarkdownFilename, MAX_BYTES, sourceProblem } from "./markdown";
 import { parseFragment } from "./vendor/parse5";
+
+export const MAX_HTML_BYTES = MAX_BYTES;
+// Email templates nest layout tables more deeply than normal prose.
+export const MAX_HTML_DEPTH = 64;
 
 const allowed = new Set("p div span h1 h2 h3 h4 h5 h6 pre code blockquote ul ol li strong b em i del s u br hr table caption thead tbody tfoot tr th td dl dt dd sup sub small figure figcaption section article header footer main".split(" "));
 const discarded = new Set("script style link meta base iframe object embed form input button textarea select option template noscript svg math audio video source track canvas portal frameset frame title".split(" "));
@@ -20,15 +25,27 @@ export function isHtmlFilename(filename: unknown): filename is string {
     return typeof filename === "string" && /\.html?$/i.test(filename);
 }
 
+// Request complete bounded supported documents only from Discord attachment CDN URLs.
+// One extra byte lets the parser reject files beyond the shared size limit.
+export function attachmentPreviewRange(url: string): string {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol === "https:" && ["cdn.discordapp.com", "media.discordapp.net"].includes(parsed.hostname)
+            && /^\/attachments\/\d+\/\d+\//.test(parsed.pathname) && (isHtmlFilename(parsed.pathname) || isMarkdownFilename(parsed.pathname) || isCsvFilename(parsed.pathname)))
+            return `bytes=0-${MAX_BYTES}`;
+    } catch { /* Keep Discord's original range for unknown URLs. */ }
+    return "bytes=0-50000";
+}
+
 export function parseHtml(source: string, bytesLeft = 0, light = false): { document?: string; error?: string; } {
-    const problem = sourceProblem(source, bytesLeft);
+    const problem = sourceProblem(source, bytesLeft, MAX_HTML_BYTES, MAX_HTML_BYTES);
     if (problem) return { error: problem };
     try {
         let count = 0;
         // parse5 builds a plain AST without a browser document or resource loads.
         const fragment = parseFragment(source);
         const render = (node: typeof fragment.childNodes[number], depth: number): string => {
-            if (++count > 6000 || depth > 24) throw new Error();
+            if (++count > 6000 || depth > MAX_HTML_DEPTH) throw new Error();
             if (node.nodeName === "#text") return escape((node as { value: string; }).value);
             if (!("tagName" in node)) return "";
             if (node.namespaceURI !== "http://www.w3.org/1999/xhtml" || discarded.has(node.tagName)) return "";
