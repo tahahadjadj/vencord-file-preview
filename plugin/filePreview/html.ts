@@ -6,6 +6,7 @@
 
 import { isCsvFilename } from "./csv";
 import { isMarkdownFilename, MAX_BYTES, sourceProblem } from "./markdown";
+import { isSvgFilename } from "./svg";
 import { parseFragment } from "./vendor/parse5";
 
 export const MAX_HTML_BYTES = MAX_BYTES;
@@ -31,7 +32,7 @@ export function attachmentPreviewRange(url: string): string {
     try {
         const parsed = new URL(url);
         if (parsed.protocol === "https:" && ["cdn.discordapp.com", "media.discordapp.net"].includes(parsed.hostname)
-            && /^\/attachments\/\d+\/\d+\//.test(parsed.pathname) && (isHtmlFilename(parsed.pathname) || isMarkdownFilename(parsed.pathname) || isCsvFilename(parsed.pathname)))
+            && /^\/attachments\/\d+\/\d+\//.test(parsed.pathname) && (isHtmlFilename(parsed.pathname) || isMarkdownFilename(parsed.pathname) || isCsvFilename(parsed.pathname) || isSvgFilename(parsed.pathname)))
             return `bytes=0-${MAX_BYTES}`;
     } catch { /* Keep Discord's original range for unknown URLs. */ }
     return "bytes=0-50000";

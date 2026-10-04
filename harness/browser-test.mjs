@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { csvRows, csvSample } from "./samples.mjs";
+import { csvRows, csvSample, svgSample } from "./samples.mjs";
 
 const base = new URL("./", import.meta.url).pathname;
 const output = new URL("../test-results/", import.meta.url).pathname;
@@ -157,9 +157,63 @@ try {
     assert.ok(await page.$eval("#csv-wide .vc-file-rich", node => node.scrollWidth > node.clientWidth));
     await page.click("#csv-card .vc-file-toolbar button:nth-child(2)");
     await (await page.$("#csv-card")).screenshot({ path: path.join(output, "csv-preview.png") });
+    async function verifySvg(card) {
+        const rawButton = `${card} .vc-file-toolbar button:first-child`;
+        const previewButton = `${card} .vc-file-toolbar button:nth-child(2)`;
+        assert.equal(await page.$eval(`${card} .native-raw`, node => node.textContent), svgSample);
+        for (let cycle = 0; cycle < 10; cycle++) {
+            await page.click(previewButton);
+            assert.equal(await pressed(previewButton), "true");
+            const handle = await page.waitForSelector(`${card} iframe`);
+            const frame = await handle.contentFrame();
+            await frame.waitForSelector("svg text");
+            assert.equal(await frame.$eval("svg", node => node.getAttribute("viewBox")), "0 0 320 160");
+            assert.equal(await frame.$eval("svg", node => node.getAttribute("width")), "320");
+            assert.equal(await frame.$eval("svg", node => node.getAttribute("height")), "160");
+            assert.equal(await frame.$eval("text", node => node.textContent), "SVG visual preview");
+            assert.equal(await frame.$eval("text", node => getComputedStyle(node).fill), "rgb(255, 255, 255)");
+            assert.equal(await frame.$eval("circle", node => getComputedStyle(node).fill), "rgb(251, 191, 36)");
+            assert.ok((await frame.$eval("svg > rect", node => getComputedStyle(node).fill)).includes("#vc-svg-0"));
+            assert.ok(await frame.$eval("svg", node => { const box = node.getBoundingClientRect(); return box.width === 320 && box.height === 160; }));
+            assert.equal(await page.$eval(`${card} iframe`, node => node.getAttribute("sandbox")), "");
+            assert.equal(await page.$eval(`${card} iframe`, node => node.contentDocument), null);
+            assert.equal(await frame.$$eval("script,image,use,foreignObject,animate,animateTransform,set,filter,a,iframe,form,*[onload],*[onclick],*[href]", nodes => nodes.length), 0);
+            await page.click(rawButton);
+            assert.equal(await page.$eval(`${card} .native-raw`, node => node.textContent), svgSample);
+            assert.equal(await pressed(rawButton), "true");
+        }
+    }
+    await verifySvg("#svg-card");
+    await page.click("#expand-svg");
+    await verifySvg("#svg-modal");
+    await page.focus("#svg-modal .vc-file-toolbar button:nth-child(2)");
+    await page.keyboard.press("Enter");
+    assert.equal(await pressed("#svg-modal .vc-file-toolbar button:nth-child(2)"), "true");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.$("#svg-modal"), null);
+    await page.click("#expand-svg");
+    assert.equal(await pressed("#svg-modal .vc-file-toolbar button:first-child"), "true");
+    await page.click("#close-svg");
+    assert.equal(await page.$("#svg-modal"), null);
+    await page.click("#svg-attack .vc-file-toolbar button:nth-child(2)");
+    const svgAttack = await (await page.$("#svg-attack iframe")).contentFrame();
+    await svgAttack.waitForSelector("svg > rect");
+    assert.equal(await svgAttack.$eval("svg > rect", node => getComputedStyle(node).fill), "rgb(0, 128, 0)");
+    assert.equal(await svgAttack.$$eval("script,image,use,foreignObject,animate,filter,a,iframe,form,*[href],*[onload],*[onclick]", nodes => nodes.length), 0);
+    assert.equal(await page.evaluate(() => window.svgExecuted), undefined);
+    assert.ok(await page.$eval("#svg-partial .vc-file-toolbar button:nth-child(2)", node => node.disabled));
+    await page.click("#svg-limited .vc-file-toolbar button:nth-child(2)");
+    assert.ok(await page.$eval("#svg-limited .vc-file-notice", node => node.textContent.includes("too complex")));
+    assert.equal(await pressed("#svg-limited .vc-file-toolbar button:first-child"), "true");
+    assert.equal(await page.$("#svg-limited iframe"), null);
+    await page.click("#svg-card .vc-file-toolbar button:nth-child(2)");
+    const svgFrame = await (await page.$("#svg-card iframe")).contentFrame();
+    await svgFrame.waitForSelector("svg text");
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await (await page.$("#svg-card iframe")).screenshot({ path: path.join(output, "svg-preview.png") });
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
-    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "Markdown hr/br render without React137" , "no page errors"], csvChecks: ["quoted fields, escaped quotes, BOM, embedded CRLF and empty cells", "literal hostile markup, URLs and formulas", "all records preserved with scoped column headers and caption", "10 inline and 10 expanded toggle cycles with exact Raw", "keyboard Preview and Escape dismissal", "reopen resets to Raw", "empty, malformed, partial and bounded-table fallbacks", "horizontal overflow", "no scripts, links, images, page errors or external requests"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
+    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "Markdown hr/br render without React137" , "no page errors"], csvChecks: ["quoted fields, escaped quotes, BOM, embedded CRLF and empty cells", "literal hostile markup, URLs and formulas", "all records preserved with scoped column headers and caption", "10 inline and 10 expanded toggle cycles with exact Raw", "keyboard Preview and Escape dismissal", "reopen resets to Raw", "empty, malformed, partial and bounded-table fallbacks", "horizontal overflow", "no scripts, links, images, page errors or external requests"], svgChecks: ["static geometry and text", "viewBox, dimensions, fills, gradients and simple styles", "opaque empty sandbox and no parent access", "10 inline and 10 expanded toggles with exact Raw", "keyboard Preview and Escape/button dismissal", "reopen resets to Raw", "active content, images, links and external references removed", "partial/complex fallbacks", "visual screenshot"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
     await writeFile(path.join(output, "browser-results.json"), JSON.stringify(result, null, 2) + "\n");
     console.log(JSON.stringify(result, null, 2));
 } finally { await browser.close(); server.close(); }

@@ -3,7 +3,7 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { FilePreview } from "../plugin/filePreview/Preview";
 import "../plugin/filePreview/style.css";
-import { csvSample } from "./samples.mjs";
+import { csvSample, hostileSvg, svgSample } from "./samples.mjs";
 import { MAX_BYTES } from "../plugin/filePreview/markdown";
 
 const sample = `# Markdown in Discord
@@ -47,6 +47,7 @@ function App() {
     const [visible, setVisible] = React.useState(true);
     const [version, setVersion] = React.useState(0);
     const [expanded, setExpanded] = React.useState(false);
+    const [expandedSvg, setExpandedSvg] = React.useState(false);
     ThemeStore.theme = light ? "light" : "dark";
     React.useEffect(() => { document.body.className = light ? "light" : "dark"; }, [light]);
     return <main>
@@ -62,6 +63,11 @@ function App() {
         <div className="card" id="csv-limited"><FilePreview fileName="too-many.csv" fileContents={"a\n".repeat(1001)} bytesLeft={0} raw={<pre className="native-raw">CSV original remains available</pre>} /></div>
         <div className="card" id="csv-partial"><FilePreview fileName="partial.csv" fileContents="a,b" bytesLeft={2} raw={<pre className="native-raw">a,b</pre>} /></div>
         <div className="card" id="csv-wide"><FilePreview fileName="wide.csv" fileContents={Array(20).fill("wide cell").join(",")} bytesLeft={0} raw={<pre className="native-raw">Wide CSV original</pre>} /></div>
+        <div className="card" id="svg-card"><FilePreview fileName="drawing.SVG" fileContents={svgSample} bytesLeft={0} raw={<pre className="native-raw">{svgSample}</pre>} /><button id="expand-svg" onClick={() => setExpandedSvg(true)}>Open expanded SVG</button></div>
+        {expandedSvg && <div className="card" id="svg-modal" role="dialog" aria-modal="true" aria-label="Expanded SVG" onKeyDown={event => { if (event.key === "Escape") setExpandedSvg(false); }}><button id="close-svg" onClick={() => setExpandedSvg(false)}>Close</button><FilePreview fileName="drawing.SVG" fileContents={svgSample} bytesLeft={0} raw={<pre className="native-raw">{svgSample}</pre>} /></div>}
+        <div className="card" id="svg-attack"><FilePreview fileName="hostile.svg" fileContents={hostileSvg} bytesLeft={0} raw={<pre className="native-raw">{hostileSvg}</pre>} /></div>
+        <div className="card" id="svg-partial"><FilePreview fileName="partial.svg" fileContents="<svg/>" bytesLeft={8} raw={<pre className="native-raw">Partial SVG</pre>} /></div>
+        <div className="card" id="svg-limited"><FilePreview fileName="too-many.svg" fileContents={"<svg>" + "<circle/>".repeat(2001) + "</svg>"} bytesLeft={0} raw={<pre className="native-raw">SVG original remains available</pre>} /></div>
         <div className="card" id="other-card"><FilePreview fileName="other.MARKDOWN" fileContents="# Another attachment\n\nIndependent state." bytesLeft={0} raw={<pre className="native-raw"># Another attachment</pre>} /></div>
         <div className="card" id="partial-card"><FilePreview fileName="partial.md" fileContents="# Partial content" bytesLeft={512} raw={<pre className="native-raw"># Partial content</pre>} /></div>
         <div className="card" id="large-card"><FilePreview fileName="large.md" fileContents={"x".repeat(MAX_BYTES + 1)} bytesLeft={0} raw={<pre className="native-raw">Large original source remains available</pre>} /></div>

@@ -7,8 +7,9 @@
 import { React, ThemeStore, useMemo, useState, useStateFromStores } from "@webpack/common";
 
 import { isCsvFilename, parseCsv } from "./csv";
-import { isHtmlFilename, MAX_HTML_BYTES, parseHtml } from "./html";
-import { parseMarkdown, PreviewNode, sourceProblem } from "./markdown";
+import { isHtmlFilename, parseHtml } from "./html";
+import { MAX_BYTES, parseMarkdown, PreviewNode, sourceProblem } from "./markdown";
+import { isSvgFilename, parseSvg } from "./svg";
 
 export interface PreviewProps {
     fileName: string;
@@ -46,9 +47,10 @@ export function FilePreview({ fileName, fileContents, bytesLeft, raw }: PreviewP
     const id = React.useId();
     const html = isHtmlFilename(fileName);
     const csv = isCsvFilename(fileName);
+    const svg = isSvgFilename(fileName);
     const light = useStateFromStores([ThemeStore], () => ThemeStore.theme === "light");
-    const problem = sourceProblem(fileContents, bytesLeft, undefined, html || csv ? MAX_HTML_BYTES : undefined);
-    const result = useMemo(() => preview ? html ? parseHtml(fileContents, bytesLeft, light) : csv ? parseCsv(fileContents, bytesLeft) : parseMarkdown(fileContents, bytesLeft) : undefined, [preview, html, csv, fileContents, bytesLeft, light]);
+    const problem = sourceProblem(fileContents, bytesLeft, undefined, html || csv || svg ? MAX_BYTES : undefined);
+    const result = useMemo(() => preview ? html ? parseHtml(fileContents, bytesLeft, light) : svg ? parseSvg(fileContents, bytesLeft, light) : csv ? parseCsv(fileContents, bytesLeft) : parseMarkdown(fileContents, bytesLeft) : undefined, [preview, html, csv, svg, fileContents, bytesLeft, light]);
     const error = problem ?? result?.error;
     const nodes = result && "nodes" in result ? result.nodes : undefined;
     const htmlDocument = result && "document" in result ? result.document : undefined;
@@ -60,14 +62,14 @@ export function FilePreview({ fileName, fileContents, bytesLeft, raw }: PreviewP
             <div className="vc-file-toolbar" role="group" aria-label="File view">
                 <button type="button" aria-pressed={!showPreview} aria-controls={`${id}-raw`} onClick={() => setPreview(false)}>Raw</button>
                 <button type="button" aria-pressed={showPreview} aria-controls={`${id}-rich`} disabled={!!problem} onClick={() => setPreview(true)}>Preview</button>
-                <span className="vc-file-hint">{html ? "HTML scripts, styles, images and navigation are disabled" : csv ? "CSV cells are shown as plain text" : "Images are not loaded"}</span>
+                <span className="vc-file-hint">{svg ? "Static SVG shapes; active content and external resources are disabled" : html ? "HTML scripts, styles, images and navigation are disabled" : csv ? "CSV cells are shown as plain text" : "Images are not loaded"}</span>
             </div>
             {error && <p className="vc-file-notice" role="status">{error}</p>}
             <div id={`${id}-raw`} hidden={showPreview}>{raw}</div>
             <div id={`${id}-rich`} className="vc-file-rich" hidden={!showPreview} tabIndex={showPreview ? 0 : -1} role="region" aria-label={`Rendered file: ${fileName}`}>
                 {nodes && renderNodes(nodes)}
                 {rows && <CsvTable rows={rows} fileName={fileName} />}
-                {htmlDocument && <iframe className="vc-file-html" title={`Sandboxed HTML: ${fileName}`} sandbox="" referrerPolicy="no-referrer" srcDoc={htmlDocument} tabIndex={showPreview ? 0 : -1} />}
+                {htmlDocument && <iframe className="vc-file-html" title={`Sandboxed ${svg ? "SVG" : "HTML"}: ${fileName}`} sandbox="" referrerPolicy="no-referrer" srcDoc={htmlDocument} tabIndex={showPreview ? 0 : -1} />}
             </div>
         </section>
     );
