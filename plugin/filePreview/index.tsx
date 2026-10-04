@@ -34,7 +34,7 @@ export default definePlugin({
         if (!this.isFilePreview(props)) return native;
         return (
             <ErrorBoundary fallback={() => <>{raw}</>}>
-                <FilePreview key={`${props.url ?? ""}:${props.fileName}`} fileName={props.fileName!} fileContents={props.fileContents!} bytesLeft={props.bytesLeft!} raw={raw} />
+                <FilePreview key={`${props.url ?? ""}:${props.fileName}`} fileName={props.fileName!} fileContents={props.fileContents!} bytesLeft={props.bytesLeft!} url={props.url} fileSize={props.fileSize} raw={raw} />
             </ErrorBoundary>
         );
     }

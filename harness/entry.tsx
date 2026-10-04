@@ -42,6 +42,21 @@ Second line.
 const htmlSample = "<h1>HTML file preview</h1><p>Readable <strong>HTML</strong>, isolated from Discord.</p><ul><li>Lists</li><li>Tables</li></ul><table><tr><th>Format</th><th>View</th></tr><tr><td>HTML</td><td>Preview</td></tr></table><pre><code>const mode = \"Preview\";</code></pre><a href=\"https://tracking.invalid/leave\" target=\"_top\">Navigation is disabled</a><img src=\"https://tracking.invalid/image\" alt=\"Remote image\"><script>parent.htmlExecuted=true;fetch(\"https://tracking.invalid/script\");window.open(\"https://tracking.invalid/popup\");</script><style>@import \"https://tracking.invalid/style\";</style><form action=\"https://tracking.invalid/form\"><input value=\"no\"></form><iframe src=\"https://tracking.invalid/frame\"></iframe><meta http-equiv=\"refresh\" content=\"0;url=https://tracking.invalid/refresh\">";
 
 const root = createRoot(document.getElementById("root")!);
+const largeSvgDrawing = '<svg viewBox="0 0 320 800"><defs><rect id="large-clip-shape" width="320" height="800"/><clipPath id="large-clip"><use href="#large-clip-shape"/></clipPath><mask id="large-mask" width="320" height="800" maskUnits="userSpaceOnUse"><rect width="320" height="800" fill="white"/></mask></defs><g clip-path="url(#large-clip)" mask="url(#large-mask)"><rect width="320" height="800" fill="blue"/><text x="20" y="50" fill="white">Large SVG preview</text></g></svg>';
+const largeSvgSize = 7 * 1024 * 1024;
+const largeSvg = largeSvgDrawing.replace('<g ', '<!--' + 'x'.repeat(largeSvgSize - largeSvgDrawing.length - 7) + '--><g ');
+const largeSvgPrefix = largeSvg.slice(0, MAX_BYTES);
+const largeSvgUrl = 'https://cdn.discordapp.com/attachments/1/2/synthetic-large.svg';
+const originalFetch = window.fetch;
+Object.assign(window, { largeSvgFetches: 0 });
+window.fetch = async (input, options) => {
+    if (input !== largeSvgUrl) return originalFetch(input, options);
+    (window as unknown as {largeSvgFetches: number;}).largeSvgFetches++;
+    await new Promise(resolve => setTimeout(resolve, 60));
+    if (options?.signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    return new Response(largeSvg);
+};
+
 function App() {
     const [light, setLight] = React.useState(false);
     const [visible, setVisible] = React.useState(true);
@@ -67,7 +82,9 @@ function App() {
         {expandedSvg && <div className="card" id="svg-modal" role="dialog" aria-modal="true" aria-label="Expanded SVG" onKeyDown={event => { if (event.key === "Escape") setExpandedSvg(false); }}><button id="close-svg" onClick={() => setExpandedSvg(false)}>Close</button><FilePreview fileName="drawing.SVG" fileContents={svgSample} bytesLeft={0} raw={<pre className="native-raw">{svgSample}</pre>} /></div>}
         <div className="card" id="svg-attack"><FilePreview fileName="hostile.svg" fileContents={hostileSvg} bytesLeft={0} raw={<pre className="native-raw">{hostileSvg}</pre>} /></div>
         <div className="card" id="svg-partial"><FilePreview fileName="partial.svg" fileContents="<svg/>" bytesLeft={8} raw={<pre className="native-raw">Partial SVG</pre>} /></div>
-        <div className="card" id="svg-limited"><FilePreview fileName="too-many.svg" fileContents={"<svg>" + "<circle/>".repeat(2001) + "</svg>"} bytesLeft={0} raw={<pre className="native-raw">SVG original remains available</pre>} /></div>
+        <div className="card" id="svg-raster"><FilePreview fileName="embedded.svg" fileContents={'<svg width="100" height="100"><image width="100" height="100" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="/></svg>'} bytesLeft={0} raw={<pre className="native-raw">Synthetic raster</pre>} /></div>
+        <div className="card" id="svg-large"><FilePreview fileName="synthetic-large.svg" fileContents={largeSvgPrefix} bytesLeft={largeSvgSize - MAX_BYTES} url={largeSvgUrl} fileSize={largeSvgSize} raw={<pre className="native-raw">{largeSvgPrefix}</pre>} /></div>
+        <div className="card" id="svg-limited"><FilePreview fileName="too-many.svg" fileContents={"<svg>" + "<circle/>".repeat(10001) + "</svg>"} bytesLeft={0} raw={<pre className="native-raw">SVG original remains available</pre>} /></div>
         <div className="card" id="other-card"><FilePreview fileName="other.MARKDOWN" fileContents="# Another attachment\n\nIndependent state." bytesLeft={0} raw={<pre className="native-raw"># Another attachment</pre>} /></div>
         <div className="card" id="partial-card"><FilePreview fileName="partial.md" fileContents="# Partial content" bytesLeft={512} raw={<pre className="native-raw"># Partial content</pre>} /></div>
         <div className="card" id="large-card"><FilePreview fileName="large.md" fileContents={"x".repeat(MAX_BYTES + 1)} bytesLeft={0} raw={<pre className="native-raw">Large original source remains available</pre>} /></div>

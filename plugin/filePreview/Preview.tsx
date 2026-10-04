@@ -9,13 +9,15 @@ import { React, ThemeStore, useMemo, useState, useStateFromStores } from "@webpa
 import { isCsvFilename, parseCsv } from "./csv";
 import { isHtmlFilename, parseHtml } from "./html";
 import { MAX_BYTES, parseMarkdown, PreviewNode, sourceProblem } from "./markdown";
-import { isSvgFilename, parseSvg } from "./svg";
+import { isSvgFilename, loadSvgSource, parseSvgAsync, svgLoadProblem, SvgResult, svgSourceProblem } from "./svg";
 
 export interface PreviewProps {
     fileName: string;
     fileContents: string;
     bytesLeft: number;
     raw: React.ReactNode;
+    url?: string;
+    fileSize?: number;
 }
 
 function renderNodes(nodes: PreviewNode[]): React.ReactNode {
@@ -42,15 +44,35 @@ function CsvTable({ rows, fileName }: { rows: string[][]; fileName: string; }) {
     );
 }
 
-export function FilePreview({ fileName, fileContents, bytesLeft, raw }: PreviewProps) {
+export function FilePreview({ fileName, fileContents, bytesLeft, raw, url, fileSize }: PreviewProps) {
     const [preview, setPreview] = useState(false);
     const id = React.useId();
     const html = isHtmlFilename(fileName);
     const csv = isCsvFilename(fileName);
     const svg = isSvgFilename(fileName);
     const light = useStateFromStores([ThemeStore], () => ThemeStore.theme === "light");
-    const problem = sourceProblem(fileContents, bytesLeft, undefined, html || csv || svg ? MAX_BYTES : undefined);
-    const result = useMemo(() => preview ? html ? parseHtml(fileContents, bytesLeft, light) : svg ? parseSvg(fileContents, bytesLeft, light) : csv ? parseCsv(fileContents, bytesLeft) : parseMarkdown(fileContents, bytesLeft) : undefined, [preview, html, csv, svg, fileContents, bytesLeft, light]);
+    const problem = useMemo(() => svg
+        ? bytesLeft > 0 ? svgLoadProblem(url, fileSize) : svgSourceProblem(fileContents, bytesLeft)
+        : sourceProblem(fileContents, bytesLeft, undefined, html || csv ? MAX_BYTES : undefined), [svg, html, csv, url, fileSize, fileContents, bytesLeft]);
+    const [svgCache, setSvgCache] = useState<{ source: string; light: boolean; result: SvgResult; }>();
+    const svgResult = svgCache?.source === fileContents && svgCache.light === light ? svgCache.result : undefined;
+    React.useEffect(() => {
+        if (!svg || !preview || problem || svgResult) return;
+        const controller = new AbortController();
+        let cancelled = false;
+        void (async () => {
+            try {
+                const source = bytesLeft > 0 ? await loadSvgSource(url!, fileSize!, controller.signal) : fileContents;
+                const result = await parseSvgAsync(source, 0, light, () => cancelled);
+                if (!cancelled && result) setSvgCache({ source: fileContents, light, result });
+            } catch (error) {
+                if (!cancelled) setSvgCache({ source: fileContents, light, result: { error: error instanceof Error ? error.message : "SVG preview could not load. Use Raw or download the original." } });
+            }
+        })();
+        return () => { cancelled = true; controller.abort(); };
+    }, [svg, preview, problem, svgResult, fileContents, bytesLeft, light, url, fileSize]);
+    const loadingSvg = svg && preview && !problem && !svgResult;
+    const result = useMemo(() => preview ? svg ? svgResult : html ? parseHtml(fileContents, bytesLeft, light) : csv ? parseCsv(fileContents, bytesLeft) : parseMarkdown(fileContents, bytesLeft) : undefined, [preview, html, csv, svg, svgResult, fileContents, bytesLeft, light]);
     const error = problem ?? result?.error;
     const nodes = result && "nodes" in result ? result.nodes : undefined;
     const htmlDocument = result && "document" in result ? result.document : undefined;
@@ -62,8 +84,9 @@ export function FilePreview({ fileName, fileContents, bytesLeft, raw }: PreviewP
             <div className="vc-file-toolbar" role="group" aria-label="File view">
                 <button type="button" aria-pressed={!showPreview} aria-controls={`${id}-raw`} onClick={() => setPreview(false)}>Raw</button>
                 <button type="button" aria-pressed={showPreview} aria-controls={`${id}-rich`} disabled={!!problem} onClick={() => setPreview(true)}>Preview</button>
-                <span className="vc-file-hint">{svg ? "Static SVG shapes; active content and external resources are disabled" : html ? "HTML scripts, styles, images and navigation are disabled" : csv ? "CSV cells are shown as plain text" : "Images are not loaded"}</span>
+                <span className="vc-file-hint">{svg ? "Static SVG shapes; embedded PNG/JPEG images; active content and external resources are disabled" : html ? "HTML scripts, styles, images and navigation are disabled" : csv ? "CSV cells are shown as plain text" : "Images are not loaded"}</span>
             </div>
+            {loadingSvg && <p className="vc-file-notice" role="status">Loading SVG preview… Raw remains available.</p>}
             {error && <p className="vc-file-notice" role="status">{error}</p>}
             <div id={`${id}-raw`} hidden={showPreview}>{raw}</div>
             <div id={`${id}-rich`} className="vc-file-rich" hidden={!showPreview} tabIndex={showPreview ? 0 : -1} role="region" aria-label={`Rendered file: ${fileName}`}>

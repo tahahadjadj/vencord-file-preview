@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { attachmentPreviewRange } from "../plugin/filePreview/html";
 import { MAX_BYTES } from "../plugin/filePreview/markdown";
-import { isSvgFilename, MAX_SVG_DEPTH, MAX_SVG_NODES, MAX_SVG_NUMBERS, MAX_SVG_OUTPUT_BYTES, MAX_SVG_PATH_COMMANDS, MAX_SVG_PATH_LENGTH, MAX_SVG_STYLE_RULES, parseSvg, SVG_CSP } from "../plugin/filePreview/svg";
+import { isSvgFilename, MAX_SVG_BYTES, MAX_SVG_DEPTH, MAX_SVG_NODES, MAX_SVG_NUMBERS, MAX_SVG_OUTPUT_BYTES, MAX_SVG_PATH_COMMANDS, MAX_SVG_PATH_LENGTH, MAX_SVG_STYLE_RULES, parseSvg, SVG_CSP } from "../plugin/filePreview/svg";
 
 const body = (source: string) => {
     const result = parseSvg(source);
@@ -46,7 +46,8 @@ test("local gradient and clip references are typed, renamed and nonrecursive", (
 test("active elements, animations, filters and all image/use resources are discarded", () => {
     const output = body('<svg onload="parent.svgExecuted=true"><script>parent.svgExecuted=true</script><foreignObject><div><img src="https://tracking.invalid/x" onerror="alert(1)"></div></foreignObject><image href="https://tracking.invalid/image"/><use href="#cycle" id="cycle"/><animate attributeName="href" values="javascript:alert(1)"/><animateTransform attributeName="transform"/><set attributeName="onload" to="alert(1)"/><filter id="f"><feImage href="https://tracking.invalid/filter"/></filter><rect width="10" height="10" filter="url(#f)" onclick="alert(1)"/></svg>');
     assert.ok(output.includes("<rect"));
-    assert.ok(!/script|foreignObject|<image|<use|<animate|<set|<filter|feImage|onload|onclick|https:|javascript:|filter=/.test(output));
+    assert.ok(!/script|foreignObject|<image|<use|<animate|<set|<filter|feImage|onload|onclick|https:|javascript:/.test(output));
+    assert.ok(!output.includes("filter=\""));
 });
 
 test("linked drawings keep geometry while all navigation and namespaced hrefs disappear", () => {
@@ -82,15 +83,15 @@ test("SVG text is escaped rather than interpreted as markup", () => {
 
 test("missing/partial/oversize text fails closed and long minified documents remain bounded", () => {
     for (const bytes of [1, NaN, Infinity, -1]) assert.ok(parseSvg("<svg/>", bytes).error);
-    assert.ok(parseSvg("x".repeat(MAX_BYTES + 1)).error);
-    assert.ok(parseSvg("😀".repeat(MAX_BYTES / 3)).error);
+    assert.ok(parseSvg("x".repeat(MAX_SVG_BYTES + 1)).error);
+    assert.ok(parseSvg("😀".repeat(MAX_SVG_BYTES / 3)).error);
     assert.ok(parseSvg('<svg><!--' + "x".repeat(80000) + '--><rect width="10" height="10"/></svg>').document);
 });
 
 test("node/depth/tag preflight guards reject excessive SVG trees", () => {
     assert.ok(parseSvg("<svg>" + "<circle/>".repeat(MAX_SVG_NODES) + "</svg>").error);
     assert.ok(parseSvg("<svg>" + "<g>".repeat(MAX_SVG_DEPTH + 1) + "</g>".repeat(MAX_SVG_DEPTH + 1) + "</svg>").error);
-    assert.ok(parseSvg("<svg><foreignObject>" + "<b>".repeat(5000) + "</b>".repeat(5000) + "</foreignObject></svg>").error);
+    assert.ok(parseSvg("<svg><foreignObject>" + "<b>".repeat(MAX_SVG_NODES) + "</b>".repeat(MAX_SVG_NODES) + "</foreignObject></svg>").error);
 });
 
 test("path length, command, geometry-number and text budgets reject resource exhaustion", () => {
@@ -103,10 +104,10 @@ test("path length, command, geometry-number and text budgets reject resource exh
 test("style-rule/output expansion budgets are independent of file size", () => {
     assert.ok(parseSvg("<svg><style>" + Array.from({ length: MAX_SVG_STYLE_RULES + 1 }, (_, index) => `.c${index}{fill:red}`).join("") + "</style></svg>").error);
     const css = `.a{font-family:${"a".repeat(128)};dominant-baseline:text-before-edge;shape-rendering:geometricPrecision;text-rendering:geometricPrecision;stroke-linejoin:miter-clip;font-weight:bold;font-size:512;visibility:visible;vector-effect:non-scaling-stroke;paint-order:stroke fill markers;stroke-linecap:square;fill:rebeccapurple;stroke:rebeccapurple}`;
-    const source = "<svg><style>" + css + "</style>" + '<g class="a"/>'.repeat(1900) + "</svg>";
+    const source = "<svg><style>" + css + "</style>" + ('<text class="a">' + "&lt;".repeat(8000) + '</text>').repeat(3) + "</svg>";
     assert.ok(Buffer.byteLength(source) < MAX_BYTES);
     assert.ok(parseSvg(source).error);
-    assert.ok(MAX_SVG_OUTPUT_BYTES < MAX_BYTES * 3);
+    assert.equal(MAX_SVG_OUTPUT_BYTES, MAX_SVG_BYTES);
 });
 
 test("dimensions and numeric attributes cannot create unbounded or non-finite geometry", () => {
@@ -121,7 +122,8 @@ test("SVG CSP precedes all attachment markup and keeps both theme modes isolated
         assert.ok(document.indexOf("Content-Security-Policy") < document.indexOf("<svg"));
         assert.ok(document.includes(`color-scheme:${light ? "light" : "dark"}`));
     }
-    for (const directive of ["default-src 'none'", "script-src 'none'", "connect-src 'none'", "img-src 'none'", "font-src 'none'", "form-action 'none'", "base-uri 'none'"]) assert.ok(SVG_CSP.includes(directive));
+    assert.ok(SVG_CSP.includes("img-src data:"));
+    for (const directive of ["default-src 'none'", "script-src 'none'", "connect-src 'none'", "font-src 'none'", "form-action 'none'", "base-uri 'none'"]) assert.ok(SVG_CSP.includes(directive));
 });
 
 test("bounded hostile XML, styles and malformed vectors finish promptly", () => {

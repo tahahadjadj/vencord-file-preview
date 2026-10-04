@@ -24,7 +24,7 @@ try {
     const errors = [];
     page.on("pageerror", error => errors.push(String(error)));
     await page.setRequestInterception(true);
-    page.on("request", request => { if (!request.url().startsWith(origin)) { external.push(request.url()); request.abort(); } else request.continue(); });
+    page.on("request", request => { if (!request.url().startsWith(origin) && !/^data:image\/(png|jpeg);base64,/.test(request.url())) { external.push(request.url()); request.abort(); } else request.continue(); });
     page.on("requestfailed", request => console.log("Failed request", request.url(), request.failure()));
     await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector("#main-card .vc-file-toolbar");
@@ -163,8 +163,8 @@ try {
         assert.equal(await page.$eval(`${card} .native-raw`, node => node.textContent), svgSample);
         for (let cycle = 0; cycle < 10; cycle++) {
             await page.click(previewButton);
-            assert.equal(await pressed(previewButton), "true");
             const handle = await page.waitForSelector(`${card} iframe`);
+            assert.equal(await pressed(previewButton), "true");
             const frame = await handle.contentFrame();
             await frame.waitForSelector("svg text");
             assert.equal(await frame.$eval("svg", node => node.getAttribute("viewBox")), "0 0 320 160");
@@ -196,14 +196,14 @@ try {
     await page.click("#close-svg");
     assert.equal(await page.$("#svg-modal"), null);
     await page.click("#svg-attack .vc-file-toolbar button:nth-child(2)");
-    const svgAttack = await (await page.$("#svg-attack iframe")).contentFrame();
+    const svgAttack = await (await page.waitForSelector("#svg-attack iframe")).contentFrame();
     await svgAttack.waitForSelector("svg > rect");
     assert.equal(await svgAttack.$eval("svg > rect", node => getComputedStyle(node).fill), "rgb(0, 128, 0)");
     assert.equal(await svgAttack.$$eval("script,image,use,foreignObject,animate,filter,a,iframe,form,*[href],*[onload],*[onclick]", nodes => nodes.length), 0);
     assert.equal(await page.evaluate(() => window.svgExecuted), undefined);
     assert.ok(await page.$eval("#svg-partial .vc-file-toolbar button:nth-child(2)", node => node.disabled));
     await page.click("#svg-limited .vc-file-toolbar button:nth-child(2)");
-    assert.ok(await page.$eval("#svg-limited .vc-file-notice", node => node.textContent.includes("too complex")));
+    await page.waitForFunction(() => document.querySelector("#svg-limited .vc-file-notice")?.textContent.includes("too complex"));
     assert.equal(await pressed("#svg-limited .vc-file-toolbar button:first-child"), "true");
     assert.equal(await page.$("#svg-limited iframe"), null);
     await page.click("#svg-card .vc-file-toolbar button:nth-child(2)");
@@ -211,9 +211,39 @@ try {
     await svgFrame.waitForSelector("svg text");
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await (await page.$("#svg-card iframe")).screenshot({ path: path.join(output, "svg-preview.png") });
+    await page.click('#svg-raster .vc-file-toolbar button:nth-child(2)');
+    const rasterFrame = await (await page.waitForSelector('#svg-raster iframe')).contentFrame();
+    await rasterFrame.waitForSelector('svg image');
+    assert.equal(await rasterFrame.evaluate(async () => {
+        const image = new Image();
+        image.src = document.querySelector('svg image').getAttribute('href');
+        await image.decode();
+        return image.naturalWidth;
+    }), 1);
+    const largePreview = '#svg-large .vc-file-toolbar button:nth-child(2)';
+    const largeRaw = '#svg-large .vc-file-toolbar button:first-child';
+    assert.equal(await page.evaluate(() => window.largeSvgFetches), 0);
+    assert.equal(await page.$eval(largePreview, node => node.disabled), false);
+    const largeOriginal = await page.$eval('#svg-large .native-raw', node => node.textContent);
+    await page.click(largePreview);
+    await page.waitForFunction(() => document.querySelector('#svg-large .vc-file-notice')?.textContent.includes('Loading'));
+    await page.click(largeRaw);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    assert.equal(await pressed(largeRaw), 'true');
+    assert.equal(await page.$('#svg-large iframe'), null);
+    await page.click(largePreview);
+    const largeFrame = await (await page.waitForSelector('#svg-large iframe')).contentFrame();
+    await largeFrame.waitForSelector('svg text');
+    assert.equal(await largeFrame.$eval('text', node => node.textContent), 'Large SVG preview');
+    assert.equal(await largeFrame.$eval('svg > g > rect', node => getComputedStyle(node).fill), 'rgb(0, 0, 255)');
+    assert.ok(await largeFrame.evaluate(() => document.documentElement.scrollHeight > innerHeight));
+    for (let cycle = 0; cycle < 10; cycle++) { await page.click(largeRaw); await page.click(largePreview); }
+    assert.equal(await page.evaluate(() => window.largeSvgFetches), 2);
+    await page.click(largeRaw);
+    assert.equal(await page.$eval('#svg-large .native-raw', node => node.textContent), largeOriginal);
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
-    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "Markdown hr/br render without React137" , "no page errors"], csvChecks: ["quoted fields, escaped quotes, BOM, embedded CRLF and empty cells", "literal hostile markup, URLs and formulas", "all records preserved with scoped column headers and caption", "10 inline and 10 expanded toggle cycles with exact Raw", "keyboard Preview and Escape dismissal", "reopen resets to Raw", "empty, malformed, partial and bounded-table fallbacks", "horizontal overflow", "no scripts, links, images, page errors or external requests"], svgChecks: ["static geometry and text", "viewBox, dimensions, fills, gradients and simple styles", "opaque empty sandbox and no parent access", "10 inline and 10 expanded toggles with exact Raw", "keyboard Preview and Escape/button dismissal", "reopen resets to Raw", "active content, images, links and external references removed", "partial/complex fallbacks", "visual screenshot"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
+    const result = { passed: true, checks: ["Raw default and exact source", "headings, lists, links, fenced code, GFM table", "HTML/scripts/iframes inert", "no image elements or external requests", "safe links and no referrer", "independent attachment state", "truncation/size disabled with explanation", "25 toggle cycles", "rerender state and raw node preserved", "dark/light screenshots", "keyboard Enter and labelled regions", "unmount/remount reset", "Markdown hr/br render without React137" , "no page errors"], csvChecks: ["quoted fields, escaped quotes, BOM, embedded CRLF and empty cells", "literal hostile markup, URLs and formulas", "all records preserved with scoped column headers and caption", "10 inline and 10 expanded toggle cycles with exact Raw", "keyboard Preview and Escape dismissal", "reopen resets to Raw", "empty, malformed, partial and bounded-table fallbacks", "horizontal overflow", "no scripts, links, images, page errors or external requests"], svgChecks: ["static geometry and text", "viewBox, dimensions, fills, gradients and simple styles", "opaque empty sandbox and no parent access", "10 inline and 10 expanded toggles with exact Raw", "keyboard Preview and Escape/button dismissal", "reopen resets to Raw", "active content, images, links and external references removed", "partial/complex fallbacks", "visual screenshot", "7 MiB on-demand load, cancellation, cache reuse and scrolling"], htmlChecks: ["HTML semantic preview", "scripts/resources/forms/navigation stripped", "empty opaque-origin sandbox", "parent DOM inaccessible", "script, popup and resource execution blocked even if injected", "HTML dark/light theme follows ThemeStore", "HTML partial safeguard", "10 HTML toggles and exact raw source"], externalRequests: external, pageErrors: errors };
     await writeFile(path.join(output, "browser-results.json"), JSON.stringify(result, null, 2) + "\n");
     console.log(JSON.stringify(result, null, 2));
 } finally { await browser.close(); server.close(); }
